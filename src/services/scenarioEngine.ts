@@ -1,25 +1,26 @@
-import { Scenario, TriageCategory } from '../types';
+import { Scenario, ResponseCategory } from '../types';
 import { SCENARIOS as STATIC_SCENARIOS } from '../data/scenarios';
+
+// Fisher-Yates shuffle algorithm to randomize the scenarios
+const shuffleScenarios = (scenarios: Scenario[]): Scenario[] => {
+  const shuffled = [...scenarios];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+};
 
 export const scenarioEngine = {
   async getScenarios(): Promise<Scenario[]> {
     // Simulate async fetching
     return new Promise((resolve) => {
       setTimeout(() => {
-        // In the future, this could fetch from an API
-        const normalized = STATIC_SCENARIOS.map(s => ({
-          ...s,
-          severity: this.calculateSeverity(s)
-        }));
-        resolve(normalized);
+        // For each session, we provide a randomly shuffled order of scenarios
+        const randomScenarios = shuffleScenarios(STATIC_SCENARIOS);
+        resolve(randomScenarios);
       }, 500);
     });
-  },
-
-  calculateSeverity(scenario: any): number {
-    if (scenario.correct === TriageCategory.EMERGENCY) return 8;
-    if (scenario.correct === TriageCategory.NON_EMERGENCY) return 4;
-    return 2;
   },
 
   async fetchAIScenario(): Promise<Scenario | null> {

@@ -1,18 +1,34 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { MapPin, AlertTriangle, Clock, RotateCcw } from 'lucide-react';
-import { Scenario, TriageCategory } from '../../types';
+import { 
+  MapPin, 
+  Shield, 
+  Flame, 
+  HeartPulse, 
+  Brain, 
+  ArrowDownCircle 
+} from 'lucide-react';
+import { Scenario, ResponseCategory } from '../../types';
 import { Badge } from '../ui/Badge';
 
 interface ScenarioCardProps {
   scenario: Scenario;
-  onDecision: (choice: TriageCategory) => void;
+  onDecision: (choice: ResponseCategory) => void;
   disabled?: boolean;
 }
 
-export const ScenarioCard: React.FC<ScenarioCardProps> = ({ scenario, onDecision, disabled }) => {
+const responseOptions = [
+  { category: ResponseCategory.POLICE, icon: Shield, color: 'blue', label: 'Police' },
+  { category: ResponseCategory.FIRE, icon: Flame, color: 'red', label: 'Fire' },
+  { category: ResponseCategory.MEDICAL, icon: HeartPulse, color: 'yellow', label: 'Medical' },
+  { category: ResponseCategory.MENTAL_HEALTH, icon: Brain, color: 'purple', label: 'Mental Health' },
+  { category: ResponseCategory.LOW_PRIORITY, icon: ArrowDownCircle, color: 'gray', label: 'Low Priority' }
+];
+
+const ScenarioCardComponent: React.FC<ScenarioCardProps> = ({ scenario, onDecision, disabled }) => {
   return (
     <motion.div
+      key={scenario.id}
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
@@ -23,7 +39,7 @@ export const ScenarioCard: React.FC<ScenarioCardProps> = ({ scenario, onDecision
           <Badge variant="blue">{scenario.category}</Badge>
           <div className="flex items-center gap-2 text-zinc-400 text-sm">
             <MapPin className="w-4 h-4" />
-            <span className="font-medium">{scenario.location}</span>
+            <span className="font-medium">{scenario?.location?.name || 'Unknown Location'}</span>
           </div>
         </div>
       </div>
@@ -33,33 +49,22 @@ export const ScenarioCard: React.FC<ScenarioCardProps> = ({ scenario, onDecision
           "{scenario.incident}"
         </h2>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <button 
-            disabled={disabled}
-            onClick={() => onDecision(TriageCategory.EMERGENCY)}
-            className="flex flex-col items-center justify-center p-6 bg-red-600/10 border border-red-600/20 rounded-2xl hover:bg-red-600 hover:text-white transition-all group disabled:opacity-50"
-          >
-            <AlertTriangle className="w-8 h-8 mb-2 text-red-500 group-hover:text-white" />
-            <span className="font-bold uppercase tracking-widest text-xs">Emergency</span>
-          </button>
-          <button 
-            disabled={disabled}
-            onClick={() => onDecision(TriageCategory.NON_EMERGENCY)}
-            className="flex flex-col items-center justify-center p-6 bg-yellow-600/10 border border-yellow-600/20 rounded-2xl hover:bg-yellow-600 hover:text-black transition-all group disabled:opacity-50"
-          >
-            <Clock className="w-8 h-8 mb-2 text-yellow-500 group-hover:text-black" />
-            <span className="font-bold uppercase tracking-widest text-xs">Non-Emergency</span>
-          </button>
-          <button 
-            disabled={disabled}
-            onClick={() => onDecision(TriageCategory.REDIRECT)}
-            className="flex flex-col items-center justify-center p-6 bg-green-600/10 border border-green-600/20 rounded-2xl hover:bg-green-600 hover:text-white transition-all group disabled:opacity-50"
-          >
-            <RotateCcw className="w-8 h-8 mb-2 text-green-500 group-hover:text-white" />
-            <span className="font-bold uppercase tracking-widest text-xs">City Services</span>
-          </button>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          {responseOptions.map((option) => (
+            <button
+              key={option.category}
+              disabled={disabled}
+              onClick={() => onDecision(option.category)}
+              className={`flex flex-col items-center justify-center p-6 bg-${option.color}-600/10 border border-${option.color}-600/20 rounded-2xl hover:bg-${option.color}-600 hover:text-white transition-all group disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              <option.icon className={`w-8 h-8 mb-2 text-${option.color}-500 group-hover:text-white`} />
+              <span className="font-bold uppercase tracking-widest text-xs text-center">{option.label}</span>
+            </button>
+          ))}
         </div>
       </div>
     </motion.div>
   );
 };
+
+export const ScenarioCard = React.memo(ScenarioCardComponent);

@@ -1,94 +1,98 @@
-import { useState, useCallback, useEffect } from 'react';
-import { TriageCategory, SimulationMetrics, DecisionRecord, Scenario } from '../types';
+import { useEffect } from 'react';
+import { useSimulationStore } from '../store/simulationStore';
+import { useSoundEffects } from './useSoundEffects';
+import { useCountdown } from './useCountdown';
 import { storageService } from '../services/storageService';
+import { AppMode } from '../App'; // Assuming AppMode is exported from App.tsx
 
-export const useSimulation = (scenarios: Scenario[]) => {
-  const [currentScenarioIndex, setCurrentScenarioIndex] = useState(0);
-  const [score, setScore] = useState(0);
-  const [history, setHistory] = useState<DecisionRecord[]>([]);
-  const [metrics, setMetrics] = useState<SimulationMetrics>({
-    load: 10,
-    delay: 5,
-    officerUtil: 40,
-    availableUnits: 10
-  });
-  const [isGameOver, setIsGameOver] = useState(false);
-
-  const currentScenario = scenarios[currentScenarioIndex];
-
-  const handleDecision = useCallback((choice: TriageCategory | 'timeout') => {
-    if (isGameOver || !currentScenario) return;
-
-    const isCorrect = choice === currentScenario.correct;
-    const record: DecisionRecord = {
-      scenarioId: currentScenario.id,
-      choice,
-      correct: currentScenario.correct,
-      isCorrect,
-      category: currentScenario.category,
-      timestamp: Date.now()
-    };
-
-    setHistory(prev => [...prev, record]);
-    storageService.saveDecision(record);
-
-    if (isCorrect) setScore(prev => prev + 1);
-
-    // Update metrics
-    setMetrics(prev => {
-      let newDelay = prev.delay;
-      let newLoad = prev.load;
-      let newUtil = prev.officerUtil;
-      let newUnits = prev.availableUnits;
-
-      if (!isCorrect) {
-        newDelay += (currentScenario.correct === TriageCategory.EMERGENCY) ? 8 : 3;
-        newLoad += 15;
-        newUtil += 10;
-        newUnits = Math.max(0, newUnits - 1);
-      } else {
-        newDelay = Math.max(2, newDelay - 1);
-        newLoad = Math.max(5, newLoad - 5);
-        newUtil = Math.max(30, newUtil - 2);
-        newUnits = Math.min(10, newUnits + 1);
-      }
-
-      return {
-        load: Math.min(100, newLoad),
-        delay: newDelay,
-        officerUtil: Math.min(100, newUtil),
-        availableUnits: newUnits
-      };
-    });
-
-    return record;
-  }, [currentScenario, isGameOver]);
-
-  const nextScenario = () => {
-    if (currentScenarioIndex < scenarios.length - 1) {
-      setCurrentScenarioIndex(prev => prev + 1);
-    } else {
-      setIsGameOver(true);
-    }
-  };
-
-  const reset = () => {
-    setCurrentScenarioIndex(0);
-    setScore(0);
-    setHistory([]);
-    setMetrics({ load: 10, delay: 5, officerUtil: 40, availableUnits: 10 });
-    setIsGameOver(false);
-  };
-
-  return {
+export const useSimulation = (mode: AppMode) => {
+  // 1. Select all required state and actions with a single selector
+  const {
+    scenarios,
     currentScenarioIndex,
-    currentScenario,
-    score,
-    history,
-    metrics,
     isGameOver,
-    handleDecision,
-    nextScenario,
-    reset
+    metrics,
+    history,
+    setScenarios,
+    handleDecision: originalHandleDecision,
+    nextScenario: originalNextScenario,
+    reset,
+    setRemainingTime,
+  } = useSimulationStore(state => ({
+    scenarios: state.scenarios,
+    currentScenarioIndex: state.currentScenarioIndex,
+    isGameOver: state.isGameOver,
+    metrics: state.metrics,
+    history: state.history,
+    setScenarios: state.setScenarios,
+    handleDecision: state.handleDecision,
+    nextScenario: state.nextScenario,
+    reset: state.reset,
+    setRemainingTime: state.setRemainingTime,
+  }));
+
+  const { playAlert, playSuccess, playError } = useSoundEffects();
+
+  const handleTimeout = () => {
+    const record = originalHandleDecision('timeout');
+    if (record) {
+      storageService.saveDecision(record);
+      playError();
+    }
+    nextScenarioWithSound();
+  };
+
+  const { remainingTime, startTimer, resetTimer } = useCountdown(handleTimeout);
+
+  // Synchronize the store's remainingTime with the countdown hook
+  useEffect(() => {
+    setRemainingTime(remainingTime);
+  }, [remainingTime, setRemainingTime]);
+
+  // 2. Make the timer logic aware of the application mode
+  useEffect(() => {
+    if ((mode === 'training' || mode === 'recruit') && scenarios.length > 0 && !isGameOver) {
+      playAlert();
+      // Only start the timer in recruit mode
+      if (mode === 'recruit') {
+        startTimer(10); // SCENARIO_TIME_LIMIT
+      }
+    }
+    // Reset timer if the game is over or we return to the landing page
+    if (isGameOver || mode === 'landing') {
+      resetTimer();
+    }
+  }, [mode, currentScenarioIndex, scenarios, isGameOver, playAlert, startTimer, resetTimer]);
+
+  const handleDecisionWithSound = (choice: any) => {
+    const record = originalHandleDecision(choice);
+    if (record) {
+      storageService.saveDecision(record);
+      if (record.isCorrect) {
+        playSuccess();
+      } else {
+        playError();
+      }
+    }
+    return record;
+  };
+
+  const nextScenarioWithSound = () => {
+    resetTimer();
+    originalNextScenario();
+  };
+
+  // 3. Return only the state and actions needed by the UI
+  return {
+    scenarios,
+    currentScenarioIndex,
+    isGameOver,
+    metrics,
+    history,
+    remainingTime,
+    setScenarios,
+    handleDecision: handleDecisionWithSound,
+    nextScenario: nextScenarioWithSound,
+    reset,
   };
 };
